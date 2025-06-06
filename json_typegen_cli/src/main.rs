@@ -1,6 +1,6 @@
 use clap::{App, Arg};
 use json_typegen_shared::internal_util::display_error_with_causes;
-use json_typegen_shared::{Options, OutputMode, codegen, codegen_from_macro, parse};
+use json_typegen_shared::{codegen, codegen_from_macro, parse, Options, OutputMode};
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
 
@@ -51,6 +51,7 @@ fn main_with_result() -> Result<(), Box<dyn std::error::Error>> {
                     "kotlin",
                     "kotlin/jackson",
                     "kotlin/kotlinx",
+                    "scala",
                     "python",
                     "json_schema",
                     "shape",
