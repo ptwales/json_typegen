@@ -115,7 +115,7 @@ fn generate_case_class_type(
             fields.push(field)
         }
         let case_class = if !fields.is_empty() {
-            format!("case class {}(\n  {}\n)", class_name, fields.join(",\n  "))
+            format!("case class {}(\n  {},\n)", class_name, fields.join(",\n  "))
         } else {
             format!("case class {}()", class_name)
         };
