@@ -111,7 +111,7 @@ fn generate_case_class_type(
             if let Some(code) = child_defs {
                 defs.push(code);
             }
-            let field = format!("  {field_name}: {field_type}");
+            let field = format!("{field_name}: {field_type}");
             fields.push(field)
         }
         let case_class = if !fields.is_empty() {
