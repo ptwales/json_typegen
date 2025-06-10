@@ -132,6 +132,8 @@ fn generate_case_class_type(
             format!("case class {}()", class_name)
         };
         let mut code = case_class;
+        code += "\n\n";
+        code += &generate_codec(ctxt, &class_name);
         if !defs.is_empty() {
             code += "\n\n";
             code += &defs.join("\n\n");
@@ -152,6 +154,15 @@ fn import(ctxt: &mut Ctxt, qualified: &str) -> Code {
             ImportStyle::QualifiedPaths => qualified.into(),
         },
     }
+}
+
+fn generate_codec(ctxt: &mut Ctxt, name: &str) -> Code {
+    let codec_type = import(ctxt, "io.circe.Codec");
+    let derive_codec = import(ctxt, "io.circe.generic.semiauto.deriveCodec");
+    format!(
+        "implicit lazy val codec{}: {}[{}] = {}[{}]",
+        name, codec_type, name, derive_codec, name,
+    )
 }
 
 fn field_name(name: &str) -> Ident {
