@@ -5,9 +5,11 @@ use crate::options::Options;
 use crate::shape::{self, Shape};
 use crate::to_singular::to_singular;
 use crate::util::type_case;
+use crate::ImportStyle;
 
 struct Ctxt {
     options: Options,
+    imports: HashSet<String>,
     type_names: HashSet<String>,
     created_case_classes: Vec<(Shape, Ident)>,
 }
@@ -18,11 +20,21 @@ type Code = String;
 pub fn scala_types(name: &str, shape: &Shape, options: Options) -> Code {
     let mut ctxt = Ctxt {
         options,
+        imports: HashSet::new(),
         type_names: HashSet::new(),
         created_case_classes: Vec::new(),
     };
     let (_ident, code) = type_from_shape(&mut ctxt, name, shape);
-    code.unwrap_or_default()
+    let mut imports = ctxt.imports.drain().collect::<Vec<String>>();
+    imports.sort();
+    let import_code = imports
+        .iter()
+        .fold(String::new(), |c, i| format!("{c}import {i}\n"));
+    if import_code.is_empty() {
+        code.unwrap_or_default()
+    } else {
+        format!("{}\n\n{}", import_code, code.unwrap_or_default())
+    }
 }
 
 fn type_from_shape(ctxt: &mut Ctxt, path: &str, shape: &Shape) -> (Ident, Option<Code>) {
@@ -125,6 +137,20 @@ fn generate_case_class_type(
             code += &defs.join("\n\n");
         }
         (class_name, Some(code))
+    }
+}
+
+fn import(ctxt: &mut Ctxt, qualified: &str) -> Code {
+    match qualified.rsplit(".").next() {
+        None => qualified.into(),
+        Some(value) => match ctxt.options.import_style {
+            ImportStyle::AddImports => {
+                ctxt.imports.insert(qualified.into());
+                value.into()
+            }
+            ImportStyle::AssumeExisting => value.into(),
+            ImportStyle::QualifiedPaths => qualified.into(),
+        },
     }
 }
 
