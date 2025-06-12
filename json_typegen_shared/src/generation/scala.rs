@@ -11,10 +11,17 @@ struct Ctxt {
     options: Options,
     imports: HashSet<String>,
     type_names: HashSet<String>,
-    created_case_classes: Vec<(Shape, Ident)>,
+    created_case_classes: Vec<(Shape, TypeName)>,
 }
 
 type Ident = String;
+
+#[derive(Clone)]
+struct TypeName {
+    pub raw: String,
+    pub safe: Ident,
+}
+
 type Code = String;
 
 pub fn scala_types(name: &str, shape: &Shape, options: Options) -> Code {
@@ -24,7 +31,7 @@ pub fn scala_types(name: &str, shape: &Shape, options: Options) -> Code {
         type_names: HashSet::new(),
         created_case_classes: Vec::new(),
     };
-    let (_ident, code) = type_from_shape(&mut ctxt, name, shape);
+    let (_, code) = type_from_shape(&mut ctxt, name, shape);
     let mut imports = ctxt.imports.drain().collect::<Vec<String>>();
     imports.sort();
     let import_code = imports
@@ -103,7 +110,7 @@ fn generate_case_class_type(
 ) -> (Ident, Option<Code>) {
     let existing = ctxt.created_case_classes.iter().find_map(|(s, i)| {
         if s.is_acceptable_substitution_for(containing_shape) {
-            Some(i.into())
+            Some(i.safe.clone())
         } else {
             None
         }
@@ -112,7 +119,7 @@ fn generate_case_class_type(
         (ident, None)
     } else {
         let class_name = type_name(path, &ctxt.type_names);
-        ctxt.type_names.insert(class_name.clone());
+        ctxt.type_names.insert(class_name.raw.clone());
         ctxt.created_case_classes
             .push((containing_shape.clone(), class_name.clone()));
         let mut defs: Vec<Code> = Vec::new();
@@ -127,9 +134,13 @@ fn generate_case_class_type(
             fields.push(field)
         }
         let case_class = if !fields.is_empty() {
-            format!("case class {}(\n  {},\n)", class_name, fields.join(",\n  "))
+            format!(
+                "case class {}(\n  {},\n)",
+                class_name.safe,
+                fields.join(",\n  ")
+            )
         } else {
-            format!("case class {}()", class_name)
+            format!("case class {}()", class_name.safe)
         };
         let mut code = case_class;
         code += "\n\n";
@@ -138,7 +149,7 @@ fn generate_case_class_type(
             code += "\n\n";
             code += &defs.join("\n\n");
         }
-        (class_name, Some(code))
+        (class_name.safe, Some(code))
     }
 }
 
@@ -156,12 +167,13 @@ fn import(ctxt: &mut Ctxt, qualified: &str) -> Code {
     }
 }
 
-fn generate_codec(ctxt: &mut Ctxt, name: &str) -> Code {
+fn generate_codec(ctxt: &mut Ctxt, name: &TypeName) -> Code {
     let codec_type = import(ctxt, "io.circe.Codec");
     let derive_codec = import(ctxt, "io.circe.generic.semiauto.deriveCodec");
+    let codec_name = sanitize_name(&format!("codec{}", name.raw));
     format!(
-        "implicit lazy val codec{}: {}[{}] = {}[{}]",
-        name, codec_type, name, derive_codec, name,
+        "implicit lazy val {}: {}[{}] = {}[{}]",
+        codec_name, codec_type, name.safe, derive_codec, name.safe,
     )
 }
 
@@ -173,19 +185,20 @@ fn field_name(name: &str) -> Ident {
     }
 }
 
-fn type_name(name: &str, used_names: &HashSet<String>) -> Ident {
+fn type_name(name: &str, used_names: &HashSet<String>) -> TypeName {
     let mut base_name = type_case(name.trim());
     if base_name.is_empty() {
         base_name = "GeneratedType".into();
     }
-    let mut output_name = base_name.clone();
+    let mut raw = base_name.clone();
     let mut n = 2;
     // will fail if name is sanitized
-    while used_names.contains(&output_name) {
-        output_name = format!("{}{}", base_name, n);
+    while used_names.contains(&raw) {
+        raw = format!("{}{}", base_name, n);
         n += 1;
     }
-    sanitize_name(&output_name)
+    let safe = sanitize_name(&raw);
+    TypeName { raw, safe }
 }
 
 fn sanitize_name(name: &str) -> Ident {
@@ -273,13 +286,13 @@ mod tests {
     #[test]
     fn test_type_name() {
         let mut used = HashSet::new();
-        assert!(type_name("foo", &used) == "Foo");
-        assert!(type_name("type", &used) == "Type");
-        assert!(type_name("foo bar", &used) == "FooBar");
+        assert!(type_name("foo", &used).safe == "Foo");
+        assert!(type_name("type", &used).safe == "Type");
+        assert!(type_name("foo bar", &used).safe == "FooBar");
         used.insert("FooBar".to_owned());
-        assert!(type_name("foo_bar", &used) == "FooBar2");
-        assert!(type_name("123", &used) == "`123`");
+        assert!(type_name("foo_bar", &used).safe == "FooBar2");
+        assert!(type_name("123", &used).safe == "`123`");
         used.insert("`123`".to_owned());
-        assert!(type_name("123", &used) == "`1232`");
+        assert!(type_name("123", &used).safe == "`123`");
     }
 }
