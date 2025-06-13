@@ -31,16 +31,27 @@ pub fn scala_types(name: &str, shape: &Shape, options: Options) -> Code {
         type_names: HashSet::new(),
         created_case_classes: Vec::new(),
     };
-    let (_, code) = type_from_shape(&mut ctxt, name, shape);
+    let mut prelude = String::new();
+    if ctxt.options.deny_unknown_fields {
+        let config = import(&mut ctxt, "io.circe.generic.extras.Configuration");
+        prelude += &format!("implicit val config: {config} = {config}.default",);
+        prelude += ".withStrictDecoding";
+        prelude += "\n\n";
+    }
+
+    let (_, type_code) = type_from_shape(&mut ctxt, name, shape);
+    let body_code = type_code.unwrap_or_default();
+
     let mut imports = ctxt.imports.drain().collect::<Vec<String>>();
     imports.sort();
     let import_code = imports
         .iter()
         .fold(String::new(), |c, i| format!("{c}import {i}\n"));
+
     if import_code.is_empty() {
-        code.unwrap_or_default()
+        prelude + &body_code
     } else {
-        format!("{}\n\n{}", import_code, code.unwrap_or_default())
+        format!("{import_code}\n\n{prelude}{body_code}")
     }
 }
 
@@ -168,8 +179,15 @@ fn import(ctxt: &mut Ctxt, qualified: &str) -> Code {
 }
 
 fn generate_codec(ctxt: &mut Ctxt, name: &TypeName) -> Code {
+    let is_configured = ctxt
+        .imports
+        .contains("io.circe.generic.extras.Configuration");
+    let derive_codec = if is_configured {
+        import(ctxt, "io.circe.generic.semiauto.deriveConfiguredCodec")
+    } else {
+        import(ctxt, "io.circe.generic.semiauto.deriveCodec")
+    };
     let codec_type = import(ctxt, "io.circe.Codec");
-    let derive_codec = import(ctxt, "io.circe.generic.semiauto.deriveCodec");
     let codec_name = sanitize_name(&format!("codec{}", name.raw));
     format!(
         "implicit lazy val {}: {}[{}] = {}[{}]",
