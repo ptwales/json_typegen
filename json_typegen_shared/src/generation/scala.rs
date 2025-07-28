@@ -61,7 +61,7 @@ fn type_from_shape(ctxt: &mut Ctxt, path: &str, shape: &Shape) -> (Ident, Option
         Null | Any | Bottom => ("Json".into(), None),
         Bool => ("Boolean".into(), None),
         StringT => ("String".into(), None),
-        Integer => ("Int".into(), None),
+        Integer => ("Long".into(), None),
         Floating => ("Double".into(), None),
         Tuple(shapes, _n) => {
             let folded = shape::fold_shapes(shapes.clone());
