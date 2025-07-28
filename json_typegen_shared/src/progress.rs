@@ -9,14 +9,18 @@ pub(crate) struct FileWithProgress {
 }
 
 impl FileWithProgress {
+    const TEMPLATE: &str =
+        "[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} Processing file...";
+
     pub fn open<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         let len = file.metadata()?.len();
+        let style = ProgressStyle::default_bar()
+            .template(Self::TEMPLATE)
+            .unwrap();
         Ok(FileWithProgress {
             file,
-            progress: ProgressBar::new(len).with_style(ProgressStyle::default_bar().template(
-                "[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} Processing file...",
-            )),
+            progress: ProgressBar::new(len).with_style(style),
         })
     }
 }
